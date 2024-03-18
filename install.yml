@@ -1,0 +1,107 @@
+- name: Initial server configuration
+  hosts: all
+  become: yes
+  collections:
+    - community.general
+  tasks:
+    - name: Update cache
+      apt:
+        update_cache: yes
+      tags: first
+
+    - name: install deps
+      apt:
+        name: "{{ item }}"
+        state: present
+      loop:
+        - git
+        - nginx
+        - openssh-server
+      tags: first
+
+    - name: Create user ansible-worker
+      user:
+        name: ansible-worker
+        state: present
+      tags: first
+
+    - name: Add groups
+      user:
+        name: ansible-worker
+        groups: www-data
+        append: yes
+      tags: first
+
+    - name: Add premissions
+      command: chown -R www-data:ansible-worker /home/ansible-worker
+      tags: first
+
+    - name: Set git auth key
+      ansible.posix.authorized_key:
+        user: ansible-worker
+        state: present
+        key: "{{ lookup('file', inventory_dir + '/../ssh_keys/id_rsa.pub') }}"
+      tags: second
+
+    - name: Create www directory
+      file:
+        path: /home/ansible-worker/www
+        state: directory
+        owner: ansible-worker
+        group: www-data
+      tags: third
+
+    - name: Fix git error
+      command: git config --global --add safe.directory /home/ansible-worker/www
+      tags: third
+
+    - name: Clone repository
+      git:
+        repo: https://github.com/iphilka/stud-template.git
+        dest: /home/ansible-worker/www
+        clone: yes
+        update: yes
+        force: yes
+      become_user: root
+      tags: third
+
+    - name: Set premissions
+      become_user: root
+      shell: chown -R www-data:ansible-worker /home/ansible-worker/www
+      tags: third
+
+
+    - name: Copy config file
+      template:
+        src: "{{ playbook_dir }}/../configs/ansible.iphilka.ru.conf"
+        dest: /etc/nginx/sites-available/ansible.iphilka.ru.conf
+      tags: nginx
+
+    - name: Copy index.html
+      copy:
+        src: "{{ playbook_dir }}/../configs/index.html"
+        dest: /home/ansible-worker/www/index.html
+      tags: nginx
+
+    - name: Create link for sites-enabled
+      file:
+        src: /etc/nginx/sites-available/ansible.iphilka.ru.conf
+        dest: /etc/nginx/sites-enabled/ansible.iphilka.ru.conf
+        state: link
+      tags: nginx
+
+    - name: Remove def cfgs link
+      file:
+        path: /etc/nginx/sites-enabled/default
+        state: absent
+      tags: nginx
+
+    - name: start Nginx
+      service: name=nginx state=started
+      tags: nginx
+
+    - name: Reload Nginx
+      service:
+        name: nginx
+        state: reloaded
+      tags: nginx

@@ -1,0 +1,4 @@
+ansible-playbook playbooks/install.yml -i inventory/hosts.ini -t first
+ansible-playbook playbooks/install.yml -i inventory/hosts.ini -t second
+ansible-playbook playbooks/install.yml -i inventory/hosts.ini -t third
+ansible-playbook playbooks/install.yml -i inventory/hosts.ini -t nginx
